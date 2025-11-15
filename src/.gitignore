@@ -1,0 +1,5 @@
+/a.out
+/obj_dir/
+*.vcd
+/*.v#
+/.#multiplier_pipeline.v
