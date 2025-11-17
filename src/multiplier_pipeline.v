@@ -2,25 +2,13 @@
 
 module multiplier_pipeline(input wire	     clk,
 			   input wire	     stall,
-			   
+			   input wire	     valid_in,
 			   input wire [31:0] rs1_value,
 			   input wire [31:0] rs2_value,
-			   
 			   input wire [2:0]  ctrl,
-			   input wire [4:0]  rd_addr,
-			   input wire	     rd_en,
-
-			   output reg [4:0]  rd_addr_st1,
-			   output reg	     rd_en_st1,
-
-			   output reg [4:0]  rd_addr_st2,
-			   output reg	     rd_en_st2,
-
-			   output reg [4:0]  rd_addr_st3,
-			   output reg	     rd_en_st3,
+			   output wire	     valid_out,
 			   output reg [31:0] ans
 			   );
-
 
    // wire signed [17:0] B = rs2_value[17:0];
    wire signed [65:0] P;
@@ -32,27 +20,31 @@ module multiplier_pipeline(input wire	     clk,
    assign B[32] = ctrl[1] ? rs2_value[31] : 0;
    assign B[31:0] = rs2_value;
    
-   multiplier_block_wrapper multiplier_block_wrapper0(rs1_value, rs2_value, !stall, clk, P);
+   // multiplier_block_wrapper multiplier_block_wrapper0(rs1_value, rs2_value, !stall, clk, P);
+   multiplier_block_wrapper multiplier_block_wrapper0(A, B, !stall, clk, P);
    
    reg [2:0] ctrl_st1 = 0;
    reg [2:0] ctrl_st2 = 0;
    reg [2:0] ctrl_st3 = 0;
 
+   reg	     valid1 = 0;
+   reg	     valid2 = 0;
+   reg	     valid3 = 0;
+   assign valid_out = valid3;
+
    always @(posedge clk) begin
       if (!stall) begin
-	 rd_en_st1 <= rd_en;
-	 rd_addr_st1 <= rd_addr;
 	 ctrl_st1 <= ctrl;
-
-	 rd_en_st2 <= rd_en_st1;
-	 rd_addr_st2 <= rd_addr_st1;
 	 ctrl_st2 <= ctrl_st1;
-
-	 rd_en_st3 <= rd_en_st2;
-	 rd_addr_st3 <= rd_addr_st2;
 	 ctrl_st3 <= ctrl_st2;
 
-	 ans <= ctrl_st2[2] ? P[61:32] : P[31:0];
+	 valid1 <= valid_in;
+	 valid2 <= valid1;
+	 valid3 <= valid2;
       end
+   end
+
+   always @(*) begin
+      ans = ctrl_st3[2] ? P[63:32] : P[31:0];
    end
 endmodule

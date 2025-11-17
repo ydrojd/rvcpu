@@ -1,0 +1,12 @@
+* A basic 5-stage RISC-V Softcore 
+
+The base instruction set is mostly implemented.
+
+** Todo
+*** DONE Implement multiply
+CLOSED: [2025-11-17 Mon 20:25]
+*** TODO Implement divide
+*** DONE data bus
+CLOSED: [2025-11-17 Mon 20:25]
+*** TODO Basic branch predictor 
+*** TODO Basic Ram/cache hierarchy

@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 
 module uart_tx_path
-  #( parameter FREQ = 90,
+  #( parameter FREQ = 100,
      parameter BAUD = 57600)
    (
      input wire [7:0] uart_tx_data_i,

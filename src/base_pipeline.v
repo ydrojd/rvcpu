@@ -1,25 +1,19 @@
 `timescale 1ns / 1ps
 
 module base_pipeline(input wire		clk,
-		     output wire	ext_ex_en,
-		     output wire [31:0]	ext_ex_a,
-		     output wire [31:0]	ext_ex_b,
-		     output wire [31:0]	ext_ex_c,
-		     output wire [9:0]	ext_ex_operation,
-		     input wire		ext_ex_bussy,
-		     input wire [31:0]	ext_ex_y,
-
 		     output wire [31:0]	bus_dout,
 		     output wire [31:0]	bus_addr,
-		     output wire	bus_we,
-		     output wire	bus_read_en,
-		     input wire [31:0]	bus_din,
-		     input wire		bus_bussy
+		     output wire	bus_write_valid,
+		     input wire		bus_write_ready,
+		     output wire	bus_stall
 );
 
    //---forwarding and hazard controll---//
    reg        main_pipeline_stall = 0;
-   reg	      multiplier_pipeline_stall = 0;
+
+   reg	      bussy_stall = 0;
+   reg	      full_stall = 0;
+   reg	      mp_stall = 0;
 
    reg	      pc_stall = 0;
    reg	      fetch_stall = 0;
@@ -95,23 +89,25 @@ module base_pipeline(input wire		clk,
 	 ram_din_stl = rs2_value_stl;
       end
    end
-
+   
    always @(*) begin
       //---external execute---//
-      main_pipeline_stall = ext_ex_en && ext_ex_bussy || rd_en_mp2;
-      multiplier_pipeline_stall = ext_ex_en && ext_ex_bussy;
+      full_stall = bus_write_valid && !bus_write_ready;
+      bussy_stall = rd_is_multiplier_wb && !valid_out_mp;
+      main_pipeline_stall = bussy_stall || full_stall;
 
+      mp_stall = full_stall;
       fw_hazard = (rs1_en && (rd_is_ram_dout_ex || rd_is_multiplier_ex) && (rs1_addr == rd_addr_ex)) || 
 		  (rs2_en && (rd_is_ram_dout_ex || rd_is_multiplier_ex) && !ram_we && (rs2_addr == rd_addr_ex));
 
       pc_stall = fw_hazard || main_pipeline_stall;
       fetch_stall = fw_hazard || main_pipeline_stall;
       decode_stall = main_pipeline_stall;
-
+      
       ex_stall = main_pipeline_stall;
       stl_stall = main_pipeline_stall;
       wb_stall = main_pipeline_stall;
-
+      
       ex_reset = branch_taken_stl || fw_hazard;
       stl_reset = branch_taken_stl;
 
@@ -177,7 +173,7 @@ module base_pipeline(input wire		clk,
    wire	       is_jalr_inst;
    wire	       is_jal_inst;
 
-   wire [31:0]  j_immediate = {instruction_dec[31] ? (-12'b1) : (12'b0), instruction_dec[19:12], instruction_dec[20], instruction_dec[30:21], 1'b0};
+   wire [31:0] j_immediate = {instruction_dec[31] ? (-12'b1) : (12'b0), instruction_dec[19:12], instruction_dec[20], instruction_dec[30:21], 1'b0};
 
    reg [31:0]	jal_target = 0;
    always @(*) begin
@@ -278,20 +274,13 @@ module base_pipeline(input wire		clk,
    wire [31:0] alu_y_ex;
    wire	       comp_y_ex;
 
-   assign ext_ex_en = ex_operation_ex[9];
-   assign ext_ex_a = a_value_ex;
-   assign ext_ex_b = b_value_ex;
-   assign ext_ex_c = {27'd0, rs1_addr};
-   assign ext_ex_operation = ex_operation_ex;
-
    always @(*) begin
       a_value_ex = (a_is_inst_addr_ex) ? inst_addr_ex : rs1_value_fw_ex;
       b_value_ex = (b_is_immediate_ex) ? immediate_value_ex : rs2_value_fw_ex;
    end
 
    always @(*) begin
-      rd_value_ex = (rd_is_link_addr_ex) ? (next_inst_addr_ex) :
-		   (ext_ex_en ? ext_ex_y : alu_y_ex);
+      rd_value_ex = (rd_is_link_addr_ex) ? next_inst_addr_ex : alu_y_ex;
    end
 
    comparitor comparitor0(.a(rs1_value_fw_ex),
@@ -314,6 +303,21 @@ module base_pipeline(input wire		clk,
    reg		ram_we_stl = 0;
    reg		rd_is_ram_dout_stl = 0;
    reg		branch_taken_stl = 0;
+   reg		rd_is_multiplier_stl = 0;
+
+   wire	       rd_is_multiplier_ex = ex_operation_ex[8] && rd_en_ex;
+   wire [31:0] rd_value_mp;
+   wire	       valid_out_mp;
+
+   multiplier_pipeline multiplier_pipeline0(.clk(clk),
+					    .stall(mp_stall),
+					    .valid_in(rd_is_multiplier_ex && !stl_reset && !ex_stall),
+					    .rs1_value(rs1_value_fw_ex),
+					    .rs2_value(rs2_value_fw_ex),
+					    .ctrl(ex_operation_ex[2:0]),
+					    .valid_out(valid_out_mp),
+					    .ans(rd_value_mp)
+					    );
 
    always @(posedge clk) begin
       if (!ex_stall) begin
@@ -322,6 +326,7 @@ module base_pipeline(input wire		clk,
 	 ram_we_stl <= (stl_reset) ? 0 : ram_we_ex;
 	 rd_is_ram_dout_stl <= (stl_reset) ? 0 : rd_is_ram_dout_ex;
 	 branch_taken_stl <= (stl_reset) ? 0 : is_jalr_inst_ex || (is_branch_inst_ex && comp_y_ex);
+	 rd_is_multiplier_stl <= (stl_reset) ? 0 : rd_is_multiplier_ex;
 	 rs2_addr_stl <= rs2_addr_ex;
 	 rd_addr_stl <= rd_addr_ex;
 	 rs2_value_stl <= rs2_value_fw_ex;
@@ -329,44 +334,19 @@ module base_pipeline(input wire		clk,
 	 alu_y_stl <= alu_y_ex;
       end
    end
-
-   wire [4:0] rd_addr_mp1;
-   wire	      rd_en_mp1;
-   wire [4:0] rd_addr_mp2;
-   wire	      rd_en_mp2;
-   wire [4:0] rd_addr_mp3;
-   wire	      rd_en_mp3;
-   
-   wire [31:0] rd_value_mp3;
-
-   wire	       rd_is_multiplier_ex = ex_operation_ex[8] && rd_en_ex;
-   
-   multiplier_pipeline multiplier_pipeline0(.clk(clk),
-					    .stall(multiplier_pipeline_stall),
-
-					    .rs1_value(rs1_value_fw_ex),
-					    .rs2_value(rs2_value_fw_ex),
-
-					    .ctrl(ex_operation_ex[2:0]),
-					    .rd_addr(rd_addr_ex),
-					    .rd_en(rd_is_multiplier_ex && !ex_stall),
-
-					    .rd_addr_st1(rd_addr_mp1),
-					    .rd_en_st1(rd_en_mp1),
-
-					    .rd_addr_st2(rd_addr_mp2),
-					    .rd_en_st2(rd_en_mp2),
-
-					    .rd_addr_st3(rd_addr_mp3),
-					    .rd_en_st3(rd_en_mp3),
-					    .ans(rd_value_mp3)
-					    );
    
    //---stage 4: store/load---//
+   wire is_bus_addr_stl = bus_addr[31:28] == 4'hE;
+
+   assign bus_en = !stl_stall;
+   assign bus_addr = alu_y_stl;
+   assign bus_dout = ram_din_stl;
+   assign bus_write_valid = is_bus_addr_stl && ram_we_stl;
+
    reg [31:0] ram_din_stl = 0;
    ram_port ram_port0(.clk(clk),
 			.addr(alu_y_stl),
-			.we(ram_we_stl),
+			.we(ram_we_stl && !is_bus_addr_stl),
 			.din(ram_din_stl),
 			.en(!stl_stall),
 			.dout(ram_dout_wb));
@@ -377,6 +357,7 @@ module base_pipeline(input wire		clk,
    reg [31:0]	rd_value_wb = 0;
    wire [31:0]	ram_dout_wb;
    reg		rd_is_ram_dout_wb = 0;
+   reg		rd_is_multiplier_wb = 0;
 
    always @(posedge clk) begin
       if (!stl_stall) begin
@@ -384,6 +365,7 @@ module base_pipeline(input wire		clk,
 	 rd_en_wb <= rd_en_stl;
 	 rd_value_pre_wb <= rd_value_stl;
 	 rd_is_ram_dout_wb <= rd_is_ram_dout_stl;
+   	 rd_is_multiplier_wb = rd_is_multiplier_stl;
       end
    end
 
@@ -391,8 +373,8 @@ module base_pipeline(input wire		clk,
    always @(*) begin
       if (rd_is_ram_dout_wb) begin
 	 rd_value_wb = ram_dout_wb;
-      end else if (rd_en_mp3) begin
-	 rd_value_wb = rd_value_mp3;
+      end else if (rd_is_multiplier_wb) begin
+	 rd_value_wb = rd_value_mp;
       end else begin
 	 rd_value_wb = rd_value_pre_wb;
       end
