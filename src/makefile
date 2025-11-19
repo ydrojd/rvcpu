@@ -1,6 +1,6 @@
 comp = verilator -O0 --binary -Wno-lint -j 16
 
-pipeline_deps = base_pipeline.v instruction_decoder.v register_file.v alu.v ram_port.v ram_wrapper.v instruction_fetcher.v multiplier_block_wrapper.v divider_wrapper.v
+pipeline_deps = base_pipeline.v instruction_decoder.v register_file.v alu.v ram_port.v ram_wrapper.v instruction_fetcher.v multiplier_block_wrapper.v divider_wrapper.v divider.v
 
 cpu_deps = $(pipeline_deps) cpu.v uart_dev.v uart_tx_path.v
 
@@ -53,6 +53,10 @@ mixed_fw_tb: tests/mixed_fw_tb.v base_pipeline.v instruction_decoder.v register_
 mp_tb: tests/mp_tb.v base_pipeline.v instruction_decoder.v register_file.v alu.v ram_port.v ram_wrapper.v instruction_fetcher.v
 
 	$(comp) --trace tests/mp_tb.v base_pipeline.v instruction_decoder.v register_file.v alu.v ram_port.v ram_wrapper.v instruction_fetcher.v
+
+div_tb: tests/div_tb.v base_pipeline.v instruction_decoder.v register_file.v alu.v ram_port.v ram_wrapper.v instruction_fetcher.v divider.v divider_wrapper.v
+
+	$(comp) --trace tests/div_tb.v base_pipeline.v instruction_decoder.v register_file.v alu.v ram_port.v ram_wrapper.v instruction_fetcher.v divider.v divider_wrapper.v
 
 bus_tb: tests/bus_tb.v cpu.v base_pipeline.v instruction_decoder.v register_file.v alu.v ram_port.v ram_wrapper.v instruction_fetcher.v
 

@@ -20,7 +20,7 @@ module multiplier_block_wrapper  (A_0,
    reg [65:0] P1 = 0;
    reg [65:0] P2 = 0;
    reg [65:0] P3 = 0;
-   assign P_0 = P3;
+   assign P_0 = P2; // 2 cycles
    
    always @(posedge CLK_0) begin
       if (CE_0) begin

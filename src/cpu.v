@@ -15,7 +15,6 @@ module cpu(input wire clk,
 				.bus_write_ready(bus_write_ready)
 				);
 
-
    //---bus_write_ready---//
    // target device
    reg is_uart_dev = 0;

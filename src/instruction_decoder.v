@@ -69,10 +69,11 @@ module instruction_decoder(input wire [31:0] instruction,
 	     // 5'b01_011: ex_operation[9:0] = {10'b1_010_000_100}; //mulhu
 
 	     5'b01_100: ex_operation[9:0] = {10'b1_011_000_001}; //div
-	     5'b01_101: ex_operation[9:0] = {10'b1_011_000_000}; //divu
+
+	     // 5'b01_101: ex_operation[9:0] = {10'b1_011_000_000}; //divu
 
 	     5'b01_110: ex_operation[9:0] = {10'b1_011_000_011}; //rem
-	     5'b01_111: ex_operation[9:0] = {10'b1_011_000_010}; //remu
+	     // 5'b01_111: ex_operation[9:0] = {10'b1_011_000_010}; //remu
 
 	     5'b00_000: ex_operation[7:0] = `ALU_CTRL_ADD;
 	     5'b10_000: ex_operation[7:0] = `ALU_CTRL_SUB;
